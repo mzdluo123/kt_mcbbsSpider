@@ -1,24 +1,46 @@
 package edu.luo123.McbbsSpider
 
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import kotlin.collections.HashSet
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 
 
-class Controller(val startUrls: List<String>, val db: DBBase) {
-    val urls = HashSet<String>()
-    val spider = Spider()
-
-    val logger = org.apache.log4j.Logger.getLogger(Controller::class.java)
+class Controller(private val startUrls: List<String>, private val db: DBBase) {
+    private val urls = LinkedHashSet<String>()
+    private val spider = Spider()
+    private val channel = Channel<String>()
+    private val logger = org.apache.log4j.Logger.getLogger(Controller::class.java)
     suspend fun start() {
-        for (i in startUrls) {
-            processPage(i)
+        withContext(Dispatchers.Default) {
+            for (i in startUrls) {
+                launch { channel.send(i) }
+            }
+            loop()
         }
     }
 
-    suspend fun processPage(url: String) {
-        coroutineScope {
-            val doc = spider.downloadPage(url) ?: return@coroutineScope
+    private suspend fun loop() {
+        withContext(Dispatchers.Default) {
+            logger.debug("启动loop")
+            try {
+                while (true) {
+                    lateinit var url: String
+                    withTimeout(10000) {
+                        url = channel.receive()
+                    }
+                    delay(200)
+                    launch { processPage(url) }
+                }
+            }catch (e:TimeoutCancellationException){
+                logger.warn("爬取完成，正在退出")
+            }
+
+        }
+
+    }
+
+    private suspend fun processPage(url: String) {
+        withContext(Dispatchers.Default) {
+            val doc = spider.downloadPage(url) ?: return@withContext
             if (isMcbbsPage(doc.location())) {
                 val urls = spider.getAllLink(doc)
                     .filter { isMcbbsPage(it) }
@@ -27,31 +49,31 @@ class Controller(val startUrls: List<String>, val db: DBBase) {
 
                 logger.info("添加了 ${urls.size} 个链接")
                 urls.forEach {
-                    launch {  processPage(it)}
+                    launch {
+                        channel.send(it)
+                    }
                 }
             }
             if (isPostPage(url)) {
                 val post = spider.getPostInfo(doc)
                 if (post == null) {
                     logger.warn("抓取信息失败,可能是因为该页面不是帖子页面")
-                    return@coroutineScope
+                    return@withContext
                 }
-                db.addPost(post)
+                withContext(Dispatchers.IO) { launch { db.addPost(post) } }
             }
         }
-
-
     }
 
-    fun isPostPage(str: String): Boolean {
+    private fun isPostPage(str: String): Boolean {
         return "thread-" in str
     }
 
-    fun isMcbbsPage(str: String): Boolean {
+    private fun isMcbbsPage(str: String): Boolean {
         return "www.mcbbs.net" in str
     }
 
-    fun pageDeduplication(url: String): Boolean {
+    private fun pageDeduplication(url: String): Boolean {
         return urls.add(url)
     }
 }

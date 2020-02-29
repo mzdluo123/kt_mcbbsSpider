@@ -1,9 +1,7 @@
 package edu.luo123.McbbsSpider
 
 import javafx.geometry.Pos
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.apache.log4j.Logger
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -18,25 +16,28 @@ class Spider {
 
 
     suspend fun downloadPage(url: String): Document? {
-
-        delay(200)
         logger.info("正在下载 $url")
-        try {
-            return Jsoup.connect(url)
-                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
-                .get()
-        } catch (e: Exception) {
-            logger.error("错误 ${e.message}")
+        return withContext(Dispatchers.IO) {
+            val job = async {
+                try {
+                    return@async Jsoup.connect(url)
+                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
+                        .get()
+                } catch (e: Exception) {
+                    logger.error("错误", e)
+                    return@async null
+                }
+            }
+            return@withContext job.await()
         }
-        return null
     }
 
-    suspend fun getAllLink(document: Document): List<String> {
+    fun getAllLink(document: Document): List<String> {
         val elements = document.select("a[href]")
         return elements.map { it.attr("href") }
     }
 
-    suspend fun getPostInfo(document: Document): Post? {
+    fun getPostInfo(document: Document): Post? {
         val post = Post()
         try {
             post.id = IDPATTERN.find(document.location())?.value?.toInt() ?: return null
