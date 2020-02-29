@@ -1,6 +1,5 @@
 package edu.luo123.McbbsSpider
 
-import kotlinx.coroutines.*
 import org.apache.log4j.BasicConfigurator
 
 suspend fun main() {

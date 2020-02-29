@@ -18,10 +18,13 @@ class Spider {
 
 
     suspend fun downloadPage(url: String): Document? {
+
+        delay(200)
         logger.info("正在下载 $url")
-        delay(100)
         try {
-            return Jsoup.connect(url).get()
+            return Jsoup.connect(url)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
+                .get()
         } catch (e: Exception) {
             logger.error("错误 ${e.message}")
         }
