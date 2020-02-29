@@ -6,9 +6,10 @@ import kotlinx.coroutines.channels.Channel
 
 class Controller(private val startUrls: List<String>, private val db: DBBase) {
     private val urls = LinkedHashSet<String>()
-    private val spider = Spider()
+    private val spider = Spider(this)
     private val channel = Channel<String>()
     private val logger = org.apache.log4j.Logger.getLogger(Controller::class.java)
+    var blocked = false
     suspend fun start() {
         withContext(Dispatchers.Default) {
             for (i in startUrls) {
@@ -23,11 +24,15 @@ class Controller(private val startUrls: List<String>, private val db: DBBase) {
             logger.debug("启动loop")
             try {
                 while (true) {
+                    if (blocked){
+                        delay(30000)
+                        blocked = false
+                    }
                     lateinit var url: String
                     withTimeout(10000) {
                         url = channel.receive()
                     }
-                    delay(200)
+                    delay(250)
                     launch { processPage(url) }
                 }
             }catch (e:TimeoutCancellationException){
@@ -76,4 +81,5 @@ class Controller(private val startUrls: List<String>, private val db: DBBase) {
     private fun pageDeduplication(url: String): Boolean {
         return urls.add(url)
     }
+
 }

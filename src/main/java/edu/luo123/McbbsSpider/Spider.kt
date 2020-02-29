@@ -1,13 +1,13 @@
 package edu.luo123.McbbsSpider
 
-import javafx.geometry.Pos
 import kotlinx.coroutines.*
 import org.apache.log4j.Logger
+import org.jsoup.HttpStatusException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.lang.Exception
 
-class Spider {
+class Spider(val controller: Controller) {
     companion object {
         val IDPATTERN = "(\\d+\\.?\\d*)".toRegex()
     }
@@ -23,8 +23,14 @@ class Spider {
                     return@async Jsoup.connect(url)
                         .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
                         .get()
-                } catch (e: Exception) {
+                } catch (e: HttpStatusException) {
                     logger.error("错误", e)
+                    if (e.statusCode == 403) {
+                        logger.warn("30秒后将会重试，正在减速")
+                        controller.blocked = true
+                        delay(30000)
+                        return@async downloadPage(url)
+                    }
                     return@async null
                 }
             }
